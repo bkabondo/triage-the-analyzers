@@ -21,5 +21,41 @@
              Checkable: no log call in src/main/java builds its message with "+" or String.format;
              if one appears, the guard question is back and so is this rule. -->
         <exclude name="GuardLogStatement"/>
+
+        <!-- D2, 2026-11-13: narrowed, not dropped. JPA requires a no-arg constructor on every
+             entity, and such a constructor is necessarily empty and necessarily redundant-looking,
+             so both rules fire on code the framework forces us to write. The re-declarations below
+             keep both rules on everywhere else (a hand-written empty or redundant constructor in a
+             service, DTO, or plain value object still fails the build) and suppress them only for a
+             zero-argument constructor inside a @Entity / @MappedSuperclass / @Embeddable class. -->
+        <exclude name="UncommentedEmptyConstructor"/>
+        <exclude name="UnnecessaryConstructor"/>
+    </rule>
+
+    <!-- D2 re-declarations. The XPath is evaluated against the reported ConstructorDeclaration: it
+         suppresses only when the constructor takes no parameters AND its enclosing class is mapped
+         by JPA. Checkable: break either half (give the constructor a parameter, or drop the
+         @Entity) and the violation comes back. -->
+    <rule ref="category/java/documentation.xml/UncommentedEmptyConstructor">
+        <properties>
+            <property name="violationSuppressXPath"
+                      value="self::ConstructorDeclaration[
+                                 FormalParameters[@Size = 0]
+                                 and ancestor::ClassDeclaration[1]/ModifierList/Annotation[
+                                     pmd-java:typeIs('jakarta.persistence.Entity')
+                                     or pmd-java:typeIs('jakarta.persistence.MappedSuperclass')
+                                     or pmd-java:typeIs('jakarta.persistence.Embeddable')]]"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/codestyle.xml/UnnecessaryConstructor">
+        <properties>
+            <property name="violationSuppressXPath"
+                      value="self::ConstructorDeclaration[
+                                 FormalParameters[@Size = 0]
+                                 and ancestor::ClassDeclaration[1]/ModifierList/Annotation[
+                                     pmd-java:typeIs('jakarta.persistence.Entity')
+                                     or pmd-java:typeIs('jakarta.persistence.MappedSuperclass')
+                                     or pmd-java:typeIs('jakarta.persistence.Embeddable')]]"/>
+        </properties>
     </rule>
 </ruleset>
