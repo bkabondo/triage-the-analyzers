@@ -12,6 +12,11 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
     <description>PMD quickstart, with Project Pulse's decisions.</description>
+
+    <!-- D3, 2026-11-13: ControlStatementBraces stays enforced project-wide - it is deliberately
+         absent from the excludes below. The 30 brace-less guard clauses that predated the decision
+         were braced rather than baselined, so the baseline holds no ControlStatementBraces entry;
+         a new one must be fixed, not suppressed. -->
     <rule ref="rulesets/java/quickstart.xml">
         <!-- D4, 2026-11-13: off project-wide. Every log call in this codebase uses SLF4J's
              parameterized form ("{}" placeholders), so the message is never concatenated unless the
