@@ -2,6 +2,9 @@ package team.projectpulse.system;
 
 public class StatusCode {
 
+    private StatusCode() {
+    }
+
     public static final int SUCCESS = 200; // Success
 
     public static final int INVALID_ARGUMENT = 400; // Bad request, e.g., invalid parameters
