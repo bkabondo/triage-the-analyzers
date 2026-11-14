@@ -103,18 +103,25 @@ public class SecurityConfiguration {
 
     // CT_CONSTRUCTOR_THROW: the constructor generates the RSA key pair, so it propagates
     // NoSuchAlgorithmException and can leave a partially initialized object behind. The attack it
-    // warns about - a subclass whose finalizer captures that half-built instance - needs untrusted
-    // code able to subclass this class, and that condition does not hold here: nothing extends
-    // SecurityConfiguration, the class is instantiated only by the Spring container from the
-    // application's own classpath, and the JVM loads no third-party or user-supplied code.
+    // warns about is a subclass that captures that half-built instance from a finalizer, which
+    // requires a subclass an attacker controls.
     //
-    // Making the class final would express that structurally, but Spring proxies @Configuration
-    // classes by subclassing them (proxyBeanMethods defaults to true), so "final" here would need
-    // proxyBeanMethods = false as well - a change to how the bean methods are wired, not a
-    // triage decision, so it is left alone rather than made silently.
+    // This class IS subclassed - @Configuration here keeps the default proxyBeanMethods = true, so
+    // Spring generates a CGLIB subclass to intercept the six @Bean methods below. That subclass is
+    // not attacker-controlled: it is generated at startup by ConfigurationClassEnhancer from this
+    // class's own bytecode, it overrides only the @Bean methods and the BeanFactoryAware plumbing,
+    // and it declares no finalizer. The JVM loads no third-party or user-supplied code that could
+    // contribute another subclass, and nothing in src/ extends this class.
     //
-    // Checkable: "grep -rn 'extends SecurityConfiguration' src/" is empty, and this class carries
-    // no proxyBeanMethods override. If either changes, re-triage instead of keeping this.
+    // Marking the class final would rule out subclassing structurally, but it would also break that
+    // CGLIB proxy: it would require proxyBeanMethods = false, which changes how the @Bean methods
+    // are wired (inter-bean method calls would stop being routed through the container). That is a
+    // wiring change, not a triage decision, so it is not made here.
+    //
+    // Checkable: this class declares @Configuration with no proxyBeanMethods override and no
+    // finalize() override; "grep -rn 'extends SecurityConfiguration' src/" is empty; and
+    // "grep -rn 'finalize()' src/main/java" is empty. If a finalizer appears anywhere in the
+    // hierarchy, or untrusted code ever reaches this classpath, re-triage instead of keeping this.
     @SuppressFBWarnings(
             value = "CT_CONSTRUCTOR_THROW",
             justification = "No untrusted code can subclass this container-instantiated @Configuration class.")
