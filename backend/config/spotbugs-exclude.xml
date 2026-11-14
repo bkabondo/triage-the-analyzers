@@ -7,4 +7,50 @@
 
      Unlike the baseline, this file may grow, but every entry is a reviewed decision. -->
 <FindBugsFilter>
+
+  <!-- D1, 2026-11-13: EI_EXPOSE_REP and EI_EXPOSE_REP2 narrowed, not dropped. Both rules read every
+       stored or returned mutable object as a leak of internal state. That is the right reading for a
+       DTO or a value object, and it stays enforced there; the two Match entries below carve out the
+       two places where sharing the same instance is the design, not an accident.
+
+       Both key off the annotations SpotBugs records on the reported member, not off class-name
+       patterns, so the carve-out follows the mapping and the stereotype rather than a naming habit.
+       Checkable, against the findings this branch triaged: the two entries together drop 169 of the
+       237 findings and nothing else - 68 remain, none of them a JPA association or an injected bean.
+       The remainder (DTO records, PeerEvaluationAverage, WeeklyPeerEvaluationReport,
+       DocumentTemplate, MyUserPrincipal, Section.activeWeeks) still report and stay baselined. -->
+
+  <!-- 1. JPA entity relationships. An association field on a managed entity *is* a shared reference:
+       inside a persistence context Hibernate hands the same instance to every owner, and defensively
+       copying it on the way in or out would detach it and break dirty checking and cascades. Keyed
+       on the association mapping of the offending field, so @ElementCollection and plain mutable
+       fields on an entity are not covered. -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    <Or>
+      <Annotation name="jakarta.persistence.OneToOne"/>
+      <Annotation name="jakarta.persistence.OneToMany"/>
+      <Annotation name="jakarta.persistence.ManyToOne"/>
+      <Annotation name="jakarta.persistence.ManyToMany"/>
+    </Or>
+  </Match>
+
+  <!-- 2. Spring dependency-injection references. A bean's constructor stores its collaborators by
+       reference on purpose: the container owns their lifecycle, they are singletons shared by every
+       bean that depends on them, and a copy would not be the bean Spring wired. Restricted to
+       EI_EXPOSE_REP2 in a constructor of a Spring-stereotyped class, so field assignment outside
+       construction, and every other class, still reports. -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Method name="&lt;init&gt;"/>
+    <Or>
+      <Annotation name="org.springframework.stereotype.Component"/>
+      <Annotation name="org.springframework.stereotype.Service"/>
+      <Annotation name="org.springframework.stereotype.Repository"/>
+      <Annotation name="org.springframework.stereotype.Controller"/>
+      <Annotation name="org.springframework.web.bind.annotation.RestController"/>
+      <Annotation name="org.springframework.context.annotation.Configuration"/>
+    </Or>
+  </Match>
+
 </FindBugsFilter>
