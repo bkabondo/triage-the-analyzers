@@ -1,6 +1,9 @@
 package team.projectpulse.system;
 
-public class StatusCode {
+public final class StatusCode {
+
+    private StatusCode() {
+    }
 
     public static final int SUCCESS = 200; // Success
 

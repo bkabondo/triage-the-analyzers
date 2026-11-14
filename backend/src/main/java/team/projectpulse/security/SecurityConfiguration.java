@@ -1,6 +1,7 @@
 package team.projectpulse.security;
 
 import com.nimbusds.jose.jwk.JWK;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -19,6 +20,7 @@ import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -99,6 +101,30 @@ public class SecurityConfiguration {
     private final StudentInstructorAuthorizationManager studentInstructorAuthorizationManager;
 
 
+    // CT_CONSTRUCTOR_THROW: the constructor generates the RSA key pair, so it propagates
+    // NoSuchAlgorithmException and can leave a partially initialized object behind. The attack it
+    // warns about is a subclass that captures that half-built instance from a finalizer, which
+    // requires a subclass an attacker controls.
+    //
+    // This class IS subclassed - @Configuration here keeps the default proxyBeanMethods = true, so
+    // Spring generates a CGLIB subclass to intercept the six @Bean methods below. That subclass is
+    // not attacker-controlled: it is generated at startup by ConfigurationClassEnhancer from this
+    // class's own bytecode, it overrides only the @Bean methods and the BeanFactoryAware plumbing,
+    // and it declares no finalizer. The JVM loads no third-party or user-supplied code that could
+    // contribute another subclass, and nothing in src/ extends this class.
+    //
+    // Marking the class final would rule out subclassing structurally, but it would also break that
+    // CGLIB proxy: it would require proxyBeanMethods = false, which changes how the @Bean methods
+    // are wired (inter-bean method calls would stop being routed through the container). That is a
+    // wiring change, not a triage decision, so it is not made here.
+    //
+    // Checkable: this class declares @Configuration with no proxyBeanMethods override and no
+    // finalize() override; "grep -rn 'extends SecurityConfiguration' src/" is empty; and
+    // "grep -rn 'finalize()' src/main/java" is empty. If a finalizer appears anywhere in the
+    // hierarchy, or untrusted code ever reaches this classpath, re-triage instead of keeping this.
+    @SuppressFBWarnings(
+            value = "CT_CONSTRUCTOR_THROW",
+            justification = "No untrusted code can subclass this container-instantiated @Configuration class.")
     public SecurityConfiguration(CustomBasicAuthenticationEntryPoint customBasicAuthenticationEntryPoint, CustomBearerTokenAuthenticationEntryPoint customBearerTokenAuthenticationEntryPoint, CustomBearerTokenAccessDeniedHandler customBearerTokenAccessDeniedHandler, UserOwnershipAuthorizationManager userOwnershipAuthorizationManager, CourseOwnershipAuthorizationManager courseOwnershipAuthorizationManager, CourseMembershipAuthorizationManager courseMembershipAuthorizationManager, CriterionOwnershipAuthorizationManager criterionOwnershipAuthorizationManager, RubricOwnershipAuthorizationManager rubricOwnershipAuthorizationManager, CriterionMembershipAuthorizationManager criterionMembershipAuthorizationManager, RubricMembershipAuthorizationManager rubricMembershipAuthorizationManager, AssignCriterionToRubricAuthorizationManager assignCriterionToRubricAuthorizationManager, SectionMembershipAuthorizationManager sectionMembershipAuthorizationManager, SectionOwnershipAuthorizationManager sectionOwnershipAuthorizationManager, AssignRubricToSectionAuthorizationManager assignRubricToSectionAuthorizationManager, AssignInstructorToSectionAuthorizationManager assignInstructorToSectionAuthorizationManager, TeamMembershipAuthorizationManager teamMembershipAuthorizationManager, TeamOwnershipAuthorizationManager teamOwnershipAuthorizationManager, AssignStudentToTeamAuthorizationManager assignStudentToTeamAuthorizationManager, AssignInstructorToTeamAuthorizationManager assignInstructorToTeamAuthorizationManager, TransferTeamAuthorizationManager transferTeamAuthorizationManager, ActivityOwnershipAuthorizationManager activityOwnershipAuthorizationManager, ActivityMembershipAuthorizationManager activityMembershipAuthorizationManager, EvaluationOwnershipAuthorizationManager evaluationOwnershipAuthorizationManager, SectionInstructorAuthorizationManager sectionInstructorAuthorizationManager, StudentInstructorAuthorizationManager studentInstructorAuthorizationManager) throws NoSuchAlgorithmException {
         this.customBasicAuthenticationEntryPoint = customBasicAuthenticationEntryPoint;
         this.customBearerTokenAuthenticationEntryPoint = customBearerTokenAuthenticationEntryPoint;
@@ -314,7 +340,7 @@ public class SecurityConfiguration {
 
                         .anyRequest().permitAll()
                 )
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .httpBasic(httpBasic -> httpBasic.authenticationEntryPoint(this.customBasicAuthenticationEntryPoint))
                 .oauth2ResourceServer(oauth2ResourceServer -> oauth2ResourceServer

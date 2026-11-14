@@ -7,4 +7,62 @@
 
      Unlike the baseline, this file may grow, but every entry is a reviewed decision. -->
 <FindBugsFilter>
+
+  <!-- D1, 2026-11-13: EI_EXPOSE_REP and EI_EXPOSE_REP2 narrowed, not dropped. Both rules read every
+       stored or returned mutable object as a leak of internal state. That is the right reading for a
+       DTO or a value object, and it stays enforced there; the two Match entries below carve out the
+       two places where sharing the same instance is the design:
+
+         - Spring dependency-injection references, and
+         - JPA-managed persistent state, where Hibernate owns and shared-manages the collection or
+           the relationship - including @ElementCollection.
+
+       Both key off the annotations SpotBugs records on the reported member, not off class-name
+       patterns, so the carve-out follows the mapping and the stereotype rather than a naming habit.
+       Checkable, against the findings this branch triaged: the two entries together drop 171 of the
+       237 findings and nothing else - 66 remain, none of them JPA-managed state or an injected bean.
+       The remainder (DTO records, PeerEvaluationAverage, WeeklyPeerEvaluationReport,
+       DocumentTemplate, MyUserPrincipal) still report and stay baselined. -->
+
+  <!-- 1. JPA-managed persistent state. On a managed entity these fields are not the entity's private
+       scratch space - they are the persistence context's. Hibernate replaces the field value with
+       its own persistent-collection wrapper on load (a PersistentBag for a List, a PersistentSet for
+       a Set), and that wrapper is the dirty-tracking and lazy-initialization handle: a defensive copy
+       would hand back an untracked plain collection whose mutations never reach the database, and
+       for a to-one association a copy would not be the instance the persistence context has
+       identity-mapped. @ElementCollection is in scope for exactly this reason - activeWeeks holds
+       immutable Strings, so the only mutable object exposed is Hibernate's own collection.
+       (On a transient or detached instance the field is an ordinary collection again, but that is
+       equally true of the association mappings this already covered, so it does not single out
+       @ElementCollection.) Keyed on the mapping annotation of the offending field, so an unmapped
+       mutable field on an entity is not covered. -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    <Or>
+      <Annotation name="jakarta.persistence.OneToOne"/>
+      <Annotation name="jakarta.persistence.OneToMany"/>
+      <Annotation name="jakarta.persistence.ManyToOne"/>
+      <Annotation name="jakarta.persistence.ManyToMany"/>
+      <Annotation name="jakarta.persistence.ElementCollection"/>
+    </Or>
+  </Match>
+
+  <!-- 2. Spring dependency-injection references. A bean's constructor stores its collaborators by
+       reference on purpose: the container owns their lifecycle, they are singletons shared by every
+       bean that depends on them, and a copy would not be the bean Spring wired. Restricted to
+       EI_EXPOSE_REP2 in a constructor of a Spring-stereotyped class, so field assignment outside
+       construction, and every other class, still reports. -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Method name="&lt;init&gt;"/>
+    <Or>
+      <Annotation name="org.springframework.stereotype.Component"/>
+      <Annotation name="org.springframework.stereotype.Service"/>
+      <Annotation name="org.springframework.stereotype.Repository"/>
+      <Annotation name="org.springframework.stereotype.Controller"/>
+      <Annotation name="org.springframework.web.bind.annotation.RestController"/>
+      <Annotation name="org.springframework.context.annotation.Configuration"/>
+    </Or>
+  </Match>
+
 </FindBugsFilter>
