@@ -13,5 +13,13 @@
          xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
     <description>PMD quickstart, with Project Pulse's decisions.</description>
     <rule ref="rulesets/java/quickstart.xml">
+        <!-- D4, 2026-11-13: off project-wide. Every log call in this codebase uses SLF4J's
+             parameterized form ("{}" placeholders), so the message is never concatenated unless the
+             level is enabled, and the arguments we pass are field reads, getters, and collection
+             sizes - trivial to evaluate. An isDebugEnabled() guard around each one would add a
+             branch per call site and buy nothing.
+             Checkable: no log call in src/main/java builds its message with "+" or String.format;
+             if one appears, the guard question is back and so is this rule. -->
+        <exclude name="GuardLogStatement"/>
     </rule>
 </ruleset>
